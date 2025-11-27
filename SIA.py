@@ -496,14 +496,16 @@ def get_buku_pembantu_piutang_data():
         return {}
 
 # === Helper: Get Laporan Perubahan Modal ===
+# === Helper: Get Laporan Perubahan Modal - VERSI DIPERBAIKI ===
 def get_laporan_perubahan_modal():
     """Ambil data untuk laporan perubahan modal - VERSI DIPERBAIKI"""
     try:
-        # Ambil data neraca saldo setelah penyesuaian
-        neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
-        
         # Ambil data laba rugi yang BENAR
         laba_rugi_data = get_laba_rugi_data()
+        laba_bersih = laba_rugi_data['laba_bersih']
+        
+        # Ambil data neraca saldo setelah penyesuaian
+        neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
         
         # Cari akun Modal dan Prive dari NSSP
         modal_awal = 0
@@ -511,12 +513,15 @@ def get_laporan_perubahan_modal():
         
         for item in neraca_setelah_penyesuaian:
             if item['kode_akun'] == '3-1000':  # Modal Usaha
-                modal_awal = item['kredit'] if item['kredit'] > 0 else item['debit']
+                # Modal normalnya kredit, tapi bisa juga debit jika rugi
+                if item['kredit'] > 0:
+                    modal_awal = item['kredit']
+                else:
+                    modal_awal = -item['debit']  # Jika debit, berarti negatif
             elif item['kode_akun'] == '3-1200':  # Prive
                 prive = item['debit'] if item['debit'] > 0 else 0
         
-        # Gunakan laba bersih yang SESUAI dari laporan laba rugi
-        laba_bersih = laba_rugi_data['laba_bersih']
+        # Hitung perubahan modal
         perubahan_modal = laba_bersih - prive
         modal_akhir = modal_awal + perubahan_modal
         
@@ -544,7 +549,7 @@ def get_laporan_perubahan_modal():
             'perubahan_modal': 0,
             'modal_akhir': 0
         }
-
+    
 # === Helper: Ambil data laporan arus kas metode langsung ===
 # === Helper: Ambil data laporan arus kas metode langsung ===
 def get_laporan_arus_kas():
@@ -923,7 +928,6 @@ def get_neraca_saldo_setelah_penutupan():
         
         # Filter hanya akun real (aset, kewajiban, modal) - bukan akun nominal
         akun_real = []
-        akun_nominal = []  # Untuk debugging
         
         for item in neraca_setelah_penyesuaian:
             kode = item['kode_akun']
@@ -934,22 +938,32 @@ def get_neraca_saldo_setelah_penutupan():
                 kode.startswith('5-') or  # Beban & HPP  
                 kode.startswith('6-') or  # Beban penyesuaian
                 kode == '3-1100' or      # Ikhtisar Laba Rugi
-                (kode == '3-1200' and item['debit'] == 0)  # Prive dengan saldo 0
+                kode == '3-1200'         # Prive (semua prive harus 0 setelah penutupan)
             )
             
             if not is_nominal:
                 akun_real.append(item)
-            else:
-                akun_nominal.append(item)
         
-        print(f"🔍 DEBUG: {len(akun_real)} akun real, {len(akun_nominal)} akun nominal dikeluarkan")
+        print(f"🔍 DEBUG: {len(akun_real)} akun real tersisa setelah penutupan")
         
         return akun_real
         
     except Exception as e:
         print(f"Error getting neraca saldo setelah penutupan: {e}")
         return []
+
+def validate_neraca_setelah_penutupan(neraca_data):
+    """Validasi neraca saldo setelah penutupan harus balance"""
+    total_debit = sum(item['debit'] for item in neraca_data)
+    total_kredit = sum(item['kredit'] for item in neraca_data)
     
+    print(f"🔍 VALIDASI NERACA SETELAH PENUTUPAN:")
+    print(f"🔍 Total Debit: {total_debit:,.0f}")
+    print(f"🔍 Total Kredit: {total_kredit:,.0f}")
+    print(f"🔍 Selisih: {abs(total_debit - total_kredit):,.0f}")
+    
+    return abs(total_debit - total_kredit) < 0.01
+
 # === Helper: Update inventory ===
 def update_inventory(item_code, transaction_type, quantity, price, transaction_date, doc_no, doc_type, description):
     """Update inventory dengan mencatat transaksi dan mengupdate stok"""
@@ -2344,7 +2358,7 @@ function togglePassword(inputId, iconId) {
 signup_content = base_style + """
 <div class="container">
   <img src="{{ url_for('static', filename='images/logo airyn.png') }}" alt="logo airyn" class="logo">
-  <h2>Daftar Akun AYRIN</h2>
+  <h2>Daftar Akun AIRYN</h2>
   <form method="POST">
     <div class="form-group">
       <input type="email" name="email" placeholder="Alamat Email" required>
@@ -2383,7 +2397,7 @@ otp_content = base_style + """
 signin_content = base_style + """
 <div class="container">
   <img src="{{ url_for('static', filename='images/logo airyn.png') }}" alt="logo airyn" class="logo">
-  <h2>Masuk ke AYRIN</h2>
+  <h2>Masuk ke AIRYN </h2>
   <form method="POST">
     <div class="form-group">
       <input type="email" name="email" placeholder="Alamat Email" required>
